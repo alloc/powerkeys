@@ -1,0 +1,19 @@
+{
+  "include": ["src", "demo"],
+  "compilerOptions": {
+    "strict": true,
+    "erasableSyntaxOnly": true,
+    "noUncheckedSideEffectImports": true,
+    "lib": ["esnext", "dom"],
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "skipLibCheck": true,
+    "types": [],
+    "customConditions": ["source"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact"
+  }
+}
