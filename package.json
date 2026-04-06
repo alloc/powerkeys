@@ -1,6 +1,7 @@
 {
   "name": "powerkeys",
   "version": "0.0.0",
+  "description": "VS Code-style keyboard shortcuts for modern web apps",
   "license": "MIT",
   "author": "Alec Larson",
   "repository": {
@@ -8,7 +9,9 @@
     "url": "https://github.com/alloc/powerkeys.git"
   },
   "files": [
-    "dist"
+    "dist",
+    "docs",
+    "examples"
   ],
   "type": "module",
   "exports": {
@@ -28,20 +31,20 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@casbin/expression-eval": "^5.3.0",
-    "powerkeys": "link:"
+    "@casbin/expression-eval": "^5.3.0"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.5",
-    "@types/node": "*",
+    "@types/node": "^25.5.2",
     "jsdom": "^29.0.1",
-    "oxfmt": "*",
-    "oxlint": "*",
+    "oxfmt": "^0.43.0",
+    "oxlint": "^1.58.0",
+    "powerkeys": "link:",
     "preact": "^10.29.1",
-    "radashi": "*",
-    "tsdown": "*",
-    "typescript": "*",
-    "vite": "^8.0.3",
-    "vitest": "*"
+    "radashi": "^12.7.2",
+    "tsdown": "^0.21.7",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.5",
+    "vitest": "^4.1.2"
   }
 }
