@@ -155,6 +155,89 @@ describe("sigma-keys", () => {
     shortcuts.dispose();
   });
 
+  it("auto-finishes idle recordings after timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      const host = document.createElement("div");
+      document.body.appendChild(host);
+
+      const shortcuts = createShortcuts({ target: host, sequenceTimeout: 30 });
+      const session = shortcuts.record({ timeout: 10 });
+
+      await vi.advanceTimersByTimeAsync(10);
+
+      await expect(session.finished).resolves.toEqual({
+        steps: [],
+        expression: "",
+        eventType: "keydown",
+      });
+      shortcuts.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("continues recording if onUpdate throws", async () => {
+    vi.useFakeTimers();
+    try {
+      const host = document.createElement("div");
+      document.body.appendChild(host);
+
+      const errors: string[] = [];
+      const shortcuts = createShortcuts({
+        target: host,
+        sequenceTimeout: 30,
+        onError: (error, info) => {
+          errors.push(`${info.phase}:${error instanceof Error ? error.message : String(error)}`);
+        },
+      });
+
+      const session = shortcuts.record({
+        timeout: 10,
+        onUpdate: () => {
+          throw new Error("boom");
+        },
+      });
+
+      keydown(host, { key: "k", code: "KeyK" });
+      await vi.advanceTimersByTimeAsync(10);
+
+      await expect(session.finished).resolves.toEqual({
+        steps: ["k"],
+        expression: "k",
+        eventType: "keydown",
+      });
+      expect(errors).toEqual(["recording:boom"]);
+      shortcuts.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ignores modifier-only presses while recording", async () => {
+    vi.useFakeTimers();
+    try {
+      const host = document.createElement("div");
+      document.body.appendChild(host);
+
+      const shortcuts = createShortcuts({ target: host, sequenceTimeout: 30 });
+      const session = shortcuts.record({ suppressHandlers: true, timeout: 10 });
+
+      keydown(host, { key: "Control", code: "ControlLeft", ctrlKey: true });
+      keydown(host, { key: "k", code: "KeyK", ctrlKey: true });
+      await vi.advanceTimersByTimeAsync(10);
+
+      await expect(session.finished).resolves.toEqual({
+        steps: ["Ctrl+k"],
+        expression: "Ctrl+k",
+        eventType: "keydown",
+      });
+      shortcuts.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("explains why a binding did not match", () => {
     const host = document.createElement("div");
     document.body.appendChild(host);

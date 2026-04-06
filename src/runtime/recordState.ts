@@ -6,8 +6,8 @@ import type {
 } from "../types/public";
 import type { NormalizedKeyEvent, ErrorInfo } from "../types/public";
 import type { RecordingState } from "../types/internal";
+import { parseBindingToken } from "../bindings/canonicalizeStep";
 import { isWithinBoundary } from "../events/isWithinBoundary";
-import { MODIFIER_KEY_NAMES } from "../types/internal";
 
 export class RecordStateController {
   private state: RecordingState | null = null;
@@ -68,6 +68,7 @@ export class RecordStateController {
       finish,
       fail,
     };
+    this.restartTimer(this.state);
 
     return {
       stop: () => {
@@ -104,10 +105,11 @@ export class RecordStateController {
     const captured = maybeStep != null;
 
     if (captured && mutate) {
+      active.steps.push(maybeStep);
+      const recording = finalizeRecording(active.steps, active.eventType);
+      this.restartTimer(active);
       try {
-        active.steps.push(maybeStep);
-        active.onUpdate?.(finalizeRecording(active.steps, active.eventType));
-        this.restartTimer(active);
+        active.onUpdate?.(recording);
       } catch (error) {
         onError?.(error, { phase: "recording", event: normalized });
       }
@@ -151,7 +153,7 @@ export class RecordStateController {
 
 function stepFromEvent(event: NormalizedKeyEvent): string | null {
   const key = event.key;
-  if (MODIFIER_KEY_NAMES.has(key)) {
+  if (parseBindingToken(key).type === "modifier") {
     return null;
   }
   const modifiers: string[] = [];
