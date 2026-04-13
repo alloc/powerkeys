@@ -1,7 +1,5 @@
-import expressionEval from '@casbin/expression-eval'
+import { compile, parse } from '@casbin/expression-eval'
 import type { CompiledWhenClause } from '../types/internal'
-
-const { compile, parse } = expressionEval
 
 export function compileWhenClause(source: string): CompiledWhenClause {
   const ast = parse(source)
