@@ -1,86 +1,109 @@
 # Overview
 
-`powerkeys` is a DOM-bound keyboard shortcut runtime for web applications that
-need more than flat key listeners. It combines combo matching, multi-step
-sequences, scope-aware conflict resolution, `when`-clause gating, shortcut
-recording, and external availability checks behind a single runtime created
-with `createShortcuts`.
+`powerkeys` is a keyboard runtime for web apps that need more than a few flat
+`keydown` listeners. It gives you declarative bindings, layered scopes,
+multi-step sequences, `when` clauses, shortcut recording, and a shared
+availability check for external actions.
 
-The library is designed around one rule: keyboard behavior should be described
-as declarative bindings, while transient application state such as modal
-visibility, selection state, and read-only mode should live in runtime context
-and active scopes.
+The important boundary is this:
+
+- `powerkeys` owns keyboard matching, dispatch, recording, and evaluation of
+  `scope` plus `when`.
+- Your app owns commands, command-palette items, UI state, persistence, and any
+  metadata such as title, group, or search keywords.
+
+If you already have a command model, `powerkeys` should plug into it. The usual
+shape is to keep the action in your app, reuse its `scope` and `when` when you
+attach a shortcut, and call `isAvailable` when a palette or menu needs to know
+whether that action currently makes sense.
 
 # When to Use
 
 Use `powerkeys` when your app needs one or more of these:
 
 - layered shortcut scopes such as modal over editor over root
-- multi-step sequences such as `g g` or `g h`
-- state-dependent shortcuts gated by `when` expressions
-- shortcut recording for user-configurable keybindings
-- element-scoped shortcut boundaries instead of global document listeners
+- shortcuts that depend on app state such as selection, mode, or read-only
+- multi-step sequences such as `g g` or `g i`
+- user-recordable shortcut expressions
+- one source of truth for shortcut eligibility and external action availability
+- a DOM boundary narrower than the whole document
 
 # When Not to Use
 
 `powerkeys` is a poor fit when you need one or more of these instead:
 
 - OS-level or browser-global shortcuts outside the current document
-- a full rich-text editor command system with its own input model already in
-  charge of keyboard dispatch
-- shortcut behavior that should ignore application state and can stay as a
-  couple of direct event listeners
+- a full command system or palette framework that already owns keyboard input
+- direct DOM listeners with no meaningful state, scope, or conflict rules
+- a library that should own your command registry, menu model, or UI rendering
 
 # Core Abstractions
 
 `ShortcutRuntime`
 
-- Owns listeners, bindings, sequence state, runtime context, and recording.
+- Create one with `createShortcuts({ target, ... })`.
+- It owns event listeners, binding registration, runtime context, recording, and
+  availability checks.
 
 Bindings
 
-- A binding is either a single combo such as `Mod+k` or a sequence such as
-  `g g`.
-- Bindings may declare scopes, priorities, editable policies, `when` clauses,
-  and event-consumption behavior.
+- A binding is either one combo such as `Mod+k` or a sequence such as `g g`.
+- A binding always has a handler.
+- A binding may also declare `scope`, `when`, `priority`,
+  `editablePolicy`, `keyEvent`, and event-consumption behavior.
 
 Scopes
 
 - Active scopes come from `getActiveScopes`.
-- Scope order matters. Earlier scopes have higher precedence.
-- The runtime always appends `root`, so unscoped bindings remain available.
+- Earlier scopes have higher precedence.
+- `root` is always appended, so unscoped bindings and actions remain eligible.
+- Scopes are the coarse filter for "which layer of the app is active right
+  now?"
+
+`when` Clauses
+
+- A `when` clause is a boolean expression evaluated against runtime context.
+- Use it for finer-grained state such as `editor.hasSelection &&
+  !editor.readOnly`.
+- `when` clauses can be shared between your own action objects and shortcut
+  bindings.
 
 Runtime Context
 
-- User state is written with `setContext` or `batchContext` using dotted paths
-  such as `editor.hasSelection`.
-- `when` clauses and handlers receive built-in namespaces named `event`,
-  `scope`, `runtime`, and `context`.
-- User context is also spread onto the top level of the evaluation object, so
-  `editor.hasSelection` is directly readable in a `when` clause.
-- `isAvailable` uses the same scope and `when` machinery for external command
-  models. Its `event` namespace is present but inert, with missing keys set to
-  `undefined` and modifier booleans set to `false`.
+- Write context with `setContext` or `batchContext`.
+- Built-in namespaces are `event`, `scope`, `runtime`, and `context`.
+- User context is also spread onto the top level, so `editor.hasSelection` is
+  readable directly in a `when` clause.
+
+Availability Checks
+
+- `isAvailable({ scope, when })` answers whether an external action is currently
+  eligible.
+- The input is structural. Extra fields on your own action objects are ignored.
+- `isAvailable` evaluates only shared availability concerns. It does not know
+  about command ids, palette sections, search text, or rendering.
+- For external checks, the `event` namespace is inert: `event.key` and
+  `event.code` are `undefined`, and modifier booleans are `false`.
 
 Recording
 
-- Recording captures canonical shortcut expressions from live input.
-- Recording is separate from binding registration. The usual flow is to record,
-  persist the expression, and later bind that expression.
+- `record()` captures canonical shortcut expressions from live input.
+- Recording is separate from registration. The common flow is: record, persist
+  the expression, then later bind it.
 
 # Data Flow / Lifecycle
 
-1. Create a runtime with a document or element boundary.
-2. Register bindings with `bind`.
-3. Keep application state synchronized with `setContext` or `batchContext`.
-4. Return active scopes from `getActiveScopes` in precedence order.
-5. On each keyboard event, `powerkeys` normalizes the event, filters bindings by
-   boundary, scope, editable policy, and matcher state, then evaluates any
-   `when` clauses.
-6. At most one binding wins. Higher priority wins first, then sequence bindings
-   over combos, then longer sequences, then scope order, then the most recently
-   registered binding.
-7. Dispose the runtime when the owning UI subtree or application shuts down.
+1. Create a runtime with a document or element `target`.
+2. Keep your app's real state in your app, and mirror only the parts relevant to
+   shortcut eligibility into runtime context.
+3. Return active scopes from `getActiveScopes` in precedence order.
+4. Register bindings with `bind`.
+5. If your app has its own command or action objects, put shared availability on
+   those objects with `scope` and `when`.
+6. Reuse that same `scope` and `when` when attaching a keyboard shortcut.
+7. Call `isAvailable` when an external surface such as a command palette needs
+   to know whether an action should be offered right now.
+8. Dispose the runtime when the owning UI subtree or application shuts down.
 
 # Common Tasks -> Recommended APIs
 
@@ -98,24 +121,24 @@ Gate a shortcut on app state
 - `setContext("editor.hasSelection", true)`
 - `bind({ combo: "c", when: "editor.hasSelection", handler })`
 
-Reuse the same availability rules in an external command palette
+Share availability rules with an external command palette
 
-- Define your own command object with `scope` and `when`
-- `isAvailable(command)` before rendering or invoking it
-- Reuse the same `scope` and `when` in `bind({ ..., handler })` when attaching a shortcut
+- Put `scope` and `when` on your own action object
+- `isAvailable(action)` before rendering or invoking it from the palette
+- Reuse that same `scope` and `when` in `bind({ ..., handler })`
 
 Register multi-step navigation
 
 - `bind({ sequence: "g g", handler })`
-- Adjust `sequenceTimeout` when the default one second window is too short or
-  too long
+- Adjust `sequenceTimeout` when the default one-second window is not right for
+  your app
 
-Temporarily disable shortcuts
+Temporarily disable keyboard shortcuts
 
 - `pause(scope)` and `resume(scope)`
 - Omit the scope to pause or resume the whole runtime
-- `pause` affects keyboard dispatch only. `isAvailable` still evaluates against
-  the raw active scopes from `getActiveScopes`.
+- `pause` affects keyboard dispatch only. It does not make external actions
+  unavailable to `isAvailable`
 
 Let users choose their own shortcut
 
@@ -129,18 +152,28 @@ Debug why a shortcut did not fire
 
 # Recommended Patterns
 
-- Define shared availability once on your own command object with `scope` and `when`.
-- Reuse that same `scope` and `when` when attaching a keyboard shortcut with `bind`.
-- Keep command-palette metadata such as title, subtitle, group, and keywords in your own command model, not in `powerkeys`.
-- Use `setContext` or `batchContext` for transient app state that should affect both shortcuts and external command availability.
-- Use `isAvailable` as a structural check. Extra fields on your command object are ignored.
+- Keep your command or action model in your app, and treat `powerkeys` as the
+  keyboard and availability layer.
+- Use scopes for major UI layers such as modal, editor, sidebar, and root.
+- Use `when` for state that changes frequently inside one scope, such as
+  selection state or read-only mode.
+- Reuse one `scope` plus `when` rule across all invocation surfaces for the same
+  action.
+- Mirror only decision-making state into runtime context. If a value does not
+  affect eligibility, it probably does not belong there.
 
 # Patterns to Avoid
 
-- Do not make external command availability depend on keyboard-event details such as `event.key` or modifier state. `isAvailable` exposes an inert `event` object.
-- Do not use `pause` as a command-palette visibility mechanism. It affects keyboard dispatch only.
-- Do not duplicate the same availability rule in separate shortcut-only and palette-only conditions when one shared `scope` plus `when` clause will do.
-- Do not move palette presentation concerns into `powerkeys`; it owns availability checks, not command registration or menu rendering.
+- Do not build palette presentation concerns such as group names, labels, or
+  search keywords into `powerkeys`.
+- Do not use `pause` as a visibility switch for menus or palettes. It is a
+  keyboard-only control.
+- Do not make shared availability depend on keyboard-event details such as
+  `event.key` or modifier state.
+- Do not duplicate the same eligibility rule in separate shortcut-only and
+  palette-only code paths when one shared `scope` plus `when` clause will do.
+- Do not treat `getActiveScopes` as a place for fine-grained state that belongs
+  in `when`.
 
 # Invariants and Constraints
 
@@ -157,12 +190,13 @@ Debug why a shortcut did not fire
 
 # Error Model
 
-- Binding-definition errors throw synchronously during `bind`.
+- Invalid binding definitions throw synchronously during `bind`.
 - Invalid `when` syntax also throws synchronously during `isAvailable`.
 - Handler errors are sent to `onError` when provided; otherwise they are
   rethrown asynchronously.
-- `when`-clause errors do not throw through dispatch. They cause that binding to
-  fail its `when` check, and the error appears in `explain`.
+- `when`-clause evaluation errors during dispatch do not throw through the
+  native event handler. They cause that binding to fail its `when` check, and
+  the error appears in `explain`.
 - `when`-clause evaluation errors inside `isAvailable` return `false`.
 - Recording `onUpdate` errors are reported through `onError` and do not cancel
   the active recording.
@@ -178,23 +212,24 @@ Debug why a shortcut did not fire
   - Whitespace-separated combo steps, such as `g g`.
 
 - **Scope**
-  - A named dispatch layer used to resolve conflicts between otherwise matching
-    bindings.
+  - A named dispatch layer used to decide which bindings or external actions are
+    eligible before `when` clauses run.
 
 - **When Clause**
-  - A boolean expression evaluated against runtime context before dispatch.
-
-- **Editable Policy**
-  - The rule that decides whether a binding may run while focus is inside an
-    editable element.
+  - A boolean expression evaluated against runtime context to make a final
+    eligibility decision.
 
 - **Boundary**
   - The document or element passed as `target`, which limits which native events
     the runtime considers.
 
+- **Editable Policy**
+  - The rule that decides whether a binding may run while focus is inside an
+    editable element.
+
 # Non-Goals
 
-- Global shortcuts outside the current DOM boundary
-- Full command-palette UI state or menu rendering
-- Command registration or command identifiers owned by `powerkeys`
-- Framework-specific hooks or adapters
+- global shortcuts outside the current DOM boundary
+- command registration or command identifiers owned by `powerkeys`
+- command-palette or menu rendering
+- framework-specific hooks or adapters
