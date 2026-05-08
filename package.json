@@ -1,6 +1,6 @@
 {
   "name": "powerkeys",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "VS Code-style keyboard shortcuts for modern web apps",
   "license": "MIT",
   "author": "Alec Larson",
