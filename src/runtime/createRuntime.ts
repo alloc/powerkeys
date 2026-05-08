@@ -15,11 +15,13 @@ import type {
   BindingSet,
   BindingSpec,
   BindingSnapshot,
+  CanDispatchTrace,
   CandidateTrace,
   ErrorInfo,
   EvaluationTrace,
   RecordOptions,
   RecordingSession,
+  ShortcutCandidate,
   RunnableInput,
   ShortcutHandler,
   ShortcutOptions,
@@ -60,6 +62,7 @@ export function createShortcuts(options: ShortcutOptions): ShortcutRuntime {
   const sequenceTimeout = options.sequenceTimeout ?? 1000
   const defaultEditablePolicy = options.editablePolicy ?? 'ignore-editable'
   const getActiveScopes = options.getActiveScopes
+  const canDispatch = options.canDispatch
   const onError = options.onError
   const platform = detectPlatform()
 
@@ -228,14 +231,7 @@ export function createShortcuts(options: ShortcutOptions): ShortcutRuntime {
       return true
     }
 
-    const context = buildWhenContext(
-      cloneContextTree(userContext),
-      undefined,
-      activeScopes,
-      matchedScope,
-      platform,
-      recordState.isRecording(),
-    )
+    const context = buildRuntimeContext(undefined, activeScopes, matchedScope)
     const when = getCompiledWhenClause(input.when)
 
     try {
@@ -370,16 +366,28 @@ export function createShortcuts(options: ShortcutOptions): ShortcutRuntime {
     const eligibleCandidates: Candidate[] = []
     for (const candidate of candidates) {
       const trace = traceCandidates.get(candidate.binding.id)!
-      const whenTrace = evaluateWhen(
-        candidate.binding,
-        normalized,
-        activeScopesAfterPause,
-        candidate.matchedScope,
-      )
+      let context: Record<string, unknown> | undefined
+      const getContext = (): Record<string, unknown> =>
+        (context ??= buildRuntimeContext(
+          normalized,
+          activeScopesAfterPause,
+          candidate.matchedScope,
+        ))
+
+      const whenTrace = evaluateWhen(candidate.binding, getContext)
       if (whenTrace) {
         trace.when = whenTrace
         if (!whenTrace.result) {
           trace.rejectedBy = 'when'
+          continue
+        }
+      }
+
+      const canDispatchTrace = evaluateCanDispatch(candidate, normalized, getContext, mutate)
+      if (canDispatchTrace) {
+        trace.canDispatch = canDispatchTrace
+        if (!canDispatchTrace.result) {
+          trace.rejectedBy = 'can-dispatch'
           continue
         }
       }
@@ -427,14 +435,7 @@ export function createShortcuts(options: ShortcutOptions): ShortcutRuntime {
         combo: candidate.binding.steps[0]!.expression,
         sequence: candidate.binding.type === 'sequence' ? candidate.binding.expression : undefined,
         event: normalized,
-        context: buildWhenContext(
-          cloneContextTree(userContext),
-          normalized,
-          activeScopes,
-          candidate.matchedScope,
-          platform,
-          recordState.isRecording(),
-        ),
+        context: buildRuntimeContext(normalized, activeScopes, candidate.matchedScope),
         matchedScope: candidate.matchedScope,
       })
     } catch (error) {
@@ -444,25 +445,15 @@ export function createShortcuts(options: ShortcutOptions): ShortcutRuntime {
 
   function evaluateWhen(
     binding: BindingRecord,
-    normalized: ReturnType<typeof normalizeKeyboardEvent>,
-    activeScopes: readonly string[],
-    matchedScope: string,
+    getContext: () => Record<string, unknown>,
   ): WhenTrace | undefined {
     if (!binding.when) {
       return undefined
     }
-    const context = buildWhenContext(
-      cloneContextTree(userContext),
-      normalized,
-      activeScopes,
-      matchedScope,
-      platform,
-      recordState.isRecording(),
-    )
     try {
       return {
         source: binding.when.source,
-        result: binding.when.evaluate(context),
+        result: binding.when.evaluate(getContext()),
       }
     } catch (error) {
       return {
@@ -471,6 +462,66 @@ export function createShortcuts(options: ShortcutOptions): ShortcutRuntime {
         error: error instanceof Error ? error : new Error(String(error)),
       }
     }
+  }
+
+  function evaluateCanDispatch(
+    candidate: Candidate,
+    normalized: ReturnType<typeof normalizeKeyboardEvent>,
+    getContext: () => Record<string, unknown>,
+    reportErrors: boolean,
+  ): CanDispatchTrace | undefined {
+    if (!canDispatch) {
+      return undefined
+    }
+    try {
+      return {
+        result: canDispatch(toShortcutCandidate(candidate, normalized, getContext())),
+      }
+    } catch (error) {
+      const normalizedError = error instanceof Error ? error : new Error(String(error))
+      if (reportErrors) {
+        reportError(normalizedError, {
+          phase: 'canDispatch',
+          bindingId: candidate.binding.id,
+          event: normalized,
+        })
+      }
+      return {
+        result: false,
+        error: normalizedError,
+      }
+    }
+  }
+
+  function toShortcutCandidate(
+    candidate: Candidate,
+    normalized: ReturnType<typeof normalizeKeyboardEvent>,
+    context: Record<string, unknown>,
+  ): ShortcutCandidate {
+    return {
+      bindingId: candidate.binding.id,
+      combo: candidate.binding.steps[0]!.expression,
+      sequence: candidate.binding.type === 'sequence' ? candidate.binding.expression : undefined,
+      event: normalized,
+      context,
+      matchedScope: candidate.matchedScope,
+      handler: candidate.binding.handler,
+    }
+  }
+
+  function buildRuntimeContext(
+    normalized: ReturnType<typeof normalizeKeyboardEvent> | undefined,
+    activeScopes: readonly string[],
+    matchedScope: string,
+  ): Record<string, unknown> {
+    return buildWhenContext(
+      cloneContextTree(userContext),
+      normalized,
+      activeScopes,
+      matchedScope,
+      platform,
+      recordState.isRecording(),
+    )
   }
 
   function reportError(error: unknown, info: ErrorInfo): void {

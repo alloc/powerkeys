@@ -55,6 +55,118 @@ describe('powerkeys', () => {
     shortcuts.dispose()
   })
 
+  it('filters canDispatch candidates before choosing a winner', () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+
+    const calls: string[] = []
+    const guardCalls: Array<{
+      combo: string
+      handler: unknown
+      matchedScope: string
+    }> = []
+    const highPriority = () => calls.push('high')
+    const lowPriority = () => calls.push('low')
+    const shortcuts = createShortcuts({
+      target: host,
+      canDispatch: (candidate) => {
+        guardCalls.push({
+          combo: candidate.combo,
+          handler: candidate.handler,
+          matchedScope: candidate.matchedScope,
+        })
+        return candidate.handler !== highPriority
+      },
+    })
+
+    shortcuts.bind({
+      combo: 'x',
+      priority: 10,
+      preventDefault: true,
+      handler: highPriority,
+    })
+    shortcuts.bind({ combo: 'x', handler: lowPriority })
+
+    const event = keydown(host, { key: 'x', code: 'KeyX' })
+
+    expect(calls).toEqual(['low'])
+    expect(event.defaultPrevented).toBe(false)
+    expect(guardCalls).toEqual([
+      { combo: 'x', handler: highPriority, matchedScope: 'root' },
+      { combo: 'x', handler: lowPriority, matchedScope: 'root' },
+    ])
+    shortcuts.dispose()
+  })
+
+  it('runs canDispatch only after when clauses pass', () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+
+    const calls: string[] = []
+    const guardCalls: unknown[] = []
+    const blocked = () => calls.push('blocked')
+    const available = () => calls.push('available')
+    const shortcuts = createShortcuts({
+      target: host,
+      canDispatch: (candidate) => {
+        guardCalls.push(candidate.handler)
+        return true
+      },
+    })
+    shortcuts.setContext('editor.enabled', false)
+
+    shortcuts.bind({
+      combo: 'x',
+      priority: 10,
+      when: 'editor.enabled',
+      handler: blocked,
+    })
+    shortcuts.bind({ combo: 'x', handler: available })
+
+    keydown(host, { key: 'x', code: 'KeyX' })
+
+    expect(calls).toEqual(['available'])
+    expect(guardCalls).toEqual([available])
+    shortcuts.dispose()
+  })
+
+  it('reports canDispatch errors and keeps lower-priority candidates eligible', () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+
+    const calls: string[] = []
+    const errors: string[] = []
+    const throwing = () => calls.push('throwing')
+    const available = () => calls.push('available')
+    const shortcuts = createShortcuts({
+      target: host,
+      canDispatch: (candidate) => {
+        if (candidate.handler === throwing) {
+          throw new Error('not handled')
+        }
+        return true
+      },
+      onError: (error, info) => {
+        errors.push(
+          `${info.phase}:${info.bindingId}:${error instanceof Error ? error.message : String(error)}`,
+        )
+      },
+    })
+
+    const throwingHandle = shortcuts.bind({
+      combo: 'x',
+      priority: 10,
+      handler: throwing,
+    })
+    shortcuts.bind({ combo: 'x', handler: available })
+
+    keydown(host, { key: 'x', code: 'KeyX' })
+
+    expect(calls).toEqual(['available'])
+    expect(errors).toEqual([`canDispatch:${throwingHandle.id}:not handled`])
+    shortcuts.dispose()
+  })
+
   it('resolves scope precedence through getActiveScopes', () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
@@ -97,6 +209,24 @@ describe('powerkeys', () => {
       }),
     ).toBe(false)
 
+    shortcuts.dispose()
+  })
+
+  it('does not run canDispatch for external availability checks', () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+
+    const calls: string[] = []
+    const shortcuts = createShortcuts({
+      target: host,
+      canDispatch: () => {
+        calls.push('guard')
+        return false
+      },
+    })
+
+    expect(shortcuts.isAvailable({ when: 'true' })).toBe(true)
+    expect(calls).toEqual([])
     shortcuts.dispose()
   })
 
@@ -357,6 +487,40 @@ describe('powerkeys', () => {
     expect(trace.winner).toBeUndefined()
     expect(trace.candidates[0]?.when?.result).toBe(false)
     expect(trace.candidates[0]?.rejectedBy).toBe('when')
+    shortcuts.dispose()
+  })
+
+  it('explains candidates rejected by canDispatch', () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+
+    const calls: string[] = []
+    const rejected = () => calls.push('rejected')
+    const accepted = () => calls.push('accepted')
+    const shortcuts = createShortcuts({
+      target: host,
+      canDispatch: (candidate) => candidate.handler !== rejected,
+    })
+
+    const rejectedHandle = shortcuts.bind({
+      combo: 'x',
+      priority: 10,
+      handler: rejected,
+    })
+    const acceptedHandle = shortcuts.bind({ combo: 'x', handler: accepted })
+
+    const event = new KeyboardEvent('keydown', { key: 'x', code: 'KeyX', bubbles: true })
+    Object.defineProperty(event, 'target', { value: host })
+
+    const trace = shortcuts.explain(event)
+    const rejectedTrace = trace.candidates.find(
+      (candidate) => candidate.bindingId === rejectedHandle.id,
+    )
+
+    expect(calls).toEqual([])
+    expect(trace.winner).toBe(acceptedHandle.id)
+    expect(rejectedTrace?.canDispatch?.result).toBe(false)
+    expect(rejectedTrace?.rejectedBy).toBe('can-dispatch')
     shortcuts.dispose()
   })
 

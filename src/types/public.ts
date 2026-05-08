@@ -43,7 +43,20 @@ export type ShortcutOptions = {
   getActiveScopes?: () => Iterable<string>
 
   /**
-   * Receives errors thrown by handlers or recording callbacks.
+   * Filters matched candidates after `when` evaluation but before conflict
+   * resolution and event consumption.
+   *
+   * Return `false` to make a candidate ineligible while still allowing a lower
+   * priority eligible candidate to win.
+   *
+   * Keep this callback side-effect-free. It is also evaluated by
+   * {@link ShortcutRuntime.explain}.
+   */
+  canDispatch?: (candidate: ShortcutCandidate) => boolean
+
+  /**
+   * Receives errors thrown by candidate guards, handlers, or recording
+   * callbacks.
    *
    * When omitted, errors are rethrown asynchronously.
    */
@@ -104,9 +117,9 @@ export type BindingHandle = {
 /** Metadata describing an error reported by the runtime. */
 export type ErrorInfo = {
   /** Runtime phase that produced the error. */
-  phase: 'handler' | 'recording'
+  phase: 'canDispatch' | 'handler' | 'recording'
 
-  /** Winning binding identifier when the error came from a handler. */
+  /** Binding identifier when the error came from candidate dispatch or a handler. */
   bindingId?: string
 
   /** Event being processed when the error occurred, when available. */
@@ -322,6 +335,33 @@ export type NormalizedKeyEvent = {
   nativeEvent: KeyboardEvent
 }
 
+/** Candidate passed to {@link ShortcutOptions.canDispatch}. */
+export type ShortcutCandidate = {
+  /** Generated identifier for the matched binding. */
+  bindingId: string
+
+  /** Canonical combo expression for the binding's first step. */
+  combo: string
+
+  /** Canonical full sequence expression when the binding is a sequence. */
+  sequence?: string
+
+  /** Normalized keyboard event data for the matched event. */
+  event: NormalizedKeyEvent
+
+  /**
+   * Evaluation context built with the same namespaces available to `when`
+   * clauses.
+   */
+  context: Record<string, unknown>
+
+  /** Active scope that selected this candidate. */
+  matchedScope: string
+
+  /** Handler registered on the candidate binding. */
+  handler: ShortcutHandler
+}
+
 /** Snapshot of a registered binding. */
 export type BindingSnapshot = {
   /** Generated identifier for the binding. */
@@ -373,6 +413,15 @@ export type WhenTrace = {
   error?: Error
 }
 
+/** Result of evaluating {@link ShortcutOptions.canDispatch} during tracing. */
+export type CanDispatchTrace = {
+  /** Boolean result returned by the candidate guard. */
+  result: boolean
+
+  /** Evaluation error, when the guard threw and was treated as `false`. */
+  error?: Error
+}
+
 /** Per-binding trace entry returned by {@link ShortcutRuntime.explain}. */
 export type CandidateTrace = {
   /** Binding identifier being evaluated. */
@@ -387,6 +436,9 @@ export type CandidateTrace = {
   /** `when`-clause result when one was evaluated. */
   when?: WhenTrace
 
+  /** Candidate guard result when `canDispatch` was evaluated. */
+  canDispatch?: CanDispatchTrace
+
   /** Reason the candidate did not win dispatch. */
   rejectedBy?:
     | 'boundary'
@@ -396,6 +448,7 @@ export type CandidateTrace = {
     | 'scope'
     | 'matcher'
     | 'when'
+    | 'can-dispatch'
     | 'conflict'
 }
 
