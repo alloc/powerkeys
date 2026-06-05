@@ -57,6 +57,10 @@ Bindings
 - A binding always has a handler.
 - A binding may also declare `scope`, `when`, `priority`,
   `editablePolicy`, `keyEvent`, and event-consumption behavior.
+- Number-row bindings match both their semantic digit and physical
+  `KeyboardEvent.code`. For example, `Alt+1` and `Alt+Digit1` both match the
+  physical `Digit1` key, including macOS Option layouts that report a symbol in
+  `event.key`.
 
 Scopes
 

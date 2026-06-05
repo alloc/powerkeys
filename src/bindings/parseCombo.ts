@@ -2,6 +2,8 @@ import { canonicalizePrimaryKey, parseBindingToken, stepToExpression } from './c
 import type { CompiledStep, ModifierName, Platform } from '../types/internal'
 import { MODIFIER_ORDER } from '../types/internal'
 
+const DIGIT_CODE_PATTERN = /^Digit([0-9])$/i
+
 export function compileCombo(source: string, platform: Platform): CompiledStep {
   const trimmed = source.trim()
   if (!trimmed) {
@@ -45,11 +47,16 @@ export function compileCombo(source: string, platform: Platform): CompiledStep {
   }
 
   const orderedModifiers = MODIFIER_ORDER.filter((name) => modifiers.has(name))
-  const primary = canonicalizePrimaryKey(primaryKey)
+  const physicalDigit = primaryKey.match(DIGIT_CODE_PATTERN)
+  const digitCode = physicalDigit ? `Digit${physicalDigit[1]!}` : undefined
+  const primary = physicalDigit ? physicalDigit[1]! : canonicalizePrimaryKey(primaryKey)
+  const code =
+    digitCode ?? (primary.length === 1 && /[0-9]/.test(primary) ? `Digit${primary}` : undefined)
 
   return {
     key: primary,
+    code,
     modifiers: orderedModifiers,
-    expression: stepToExpression(orderedModifiers, primary),
+    expression: stepToExpression(orderedModifiers, digitCode ?? primary),
   }
 }

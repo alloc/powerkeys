@@ -31,6 +31,22 @@ describe('powerkeys', () => {
     shortcuts.dispose()
   })
 
+  it('matches alt number-row shortcuts by physical digit code', () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+
+    const calls: string[] = []
+    const shortcuts = createShortcuts({ target: host })
+    shortcuts.bind('Alt+1', () => calls.push('semantic'))
+    shortcuts.bind('Alt+Digit2', () => calls.push('physical'))
+
+    keydown(host, { key: '¡', code: 'Digit1', altKey: true })
+    keydown(host, { key: '™', code: 'Digit2', altKey: true })
+
+    expect(calls).toEqual(['semantic', 'physical'])
+    shortcuts.dispose()
+  })
+
   it('evaluates when clauses against nested context keys', () => {
     const host = document.createElement('div')
     document.body.appendChild(host)

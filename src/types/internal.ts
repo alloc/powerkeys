@@ -13,6 +13,7 @@ export type ParsedModifierName = ModifierName | 'Mod'
 
 export type CompiledStep = {
   key: string
+  code?: string
   modifiers: readonly ModifierName[]
   expression: string
 }

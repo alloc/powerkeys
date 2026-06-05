@@ -4,7 +4,7 @@ import type { BindingRecord, Candidate, CompiledStep } from '../types/internal'
 import type { NormalizedKeyEvent } from '../types/public'
 
 export function matchesStep(event: NormalizedKeyEvent, step: CompiledStep): boolean {
-  if (event.key !== step.key) {
+  if (event.key !== step.key && event.code !== step.code) {
     return false
   }
   const expected = buildModifierState(step)
