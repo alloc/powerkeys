@@ -57,10 +57,12 @@ Bindings
 - A binding always has a handler.
 - A binding may also declare `scope`, `when`, `priority`,
   `editablePolicy`, `keyEvent`, and event-consumption behavior.
-- Number-row bindings match both their semantic digit and physical
+- Alt printable bindings match both their semantic key and physical
   `KeyboardEvent.code`. For example, `Alt+1` and `Alt+Digit1` both match the
-  physical `Digit1` key, including macOS Option layouts that report a symbol in
-  `event.key`.
+  physical `Digit1` key, while `Alt+l` and `Alt+KeyL` both match the physical
+  `KeyL` key, including macOS Option layouts that report a symbol in
+  `event.key`. Non-Alt printable bindings stay semantic unless they use an
+  explicit physical code such as `Digit1` or `KeyL`.
 
 Scopes
 

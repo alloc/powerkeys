@@ -47,6 +47,42 @@ describe('powerkeys', () => {
     shortcuts.dispose()
   })
 
+  it('matches alt letter shortcuts by physical key code', () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+
+    const calls: string[] = []
+    const shortcuts = createShortcuts({ target: host })
+    shortcuts.bind('Alt+l', () => calls.push('semantic'))
+    shortcuts.bind('Alt+KeyM', () => calls.push('physical'))
+
+    keydown(host, { key: '¬', code: 'KeyL', altKey: true })
+    keydown(host, { key: 'µ', code: 'KeyM', altKey: true })
+
+    expect(calls).toEqual(['semantic', 'physical'])
+    shortcuts.dispose()
+  })
+
+  it('keeps non-alt printable shortcuts semantic unless physical code is explicit', () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+
+    const calls: string[] = []
+    const shortcuts = createShortcuts({ target: host })
+    shortcuts.bind('1', () => calls.push('semantic digit'))
+    shortcuts.bind('Digit2', () => calls.push('physical digit'))
+    shortcuts.bind('l', () => calls.push('semantic letter'))
+    shortcuts.bind('KeyM', () => calls.push('physical letter'))
+
+    keydown(host, { key: '¡', code: 'Digit1' })
+    keydown(host, { key: '™', code: 'Digit2' })
+    keydown(host, { key: '¬', code: 'KeyL' })
+    keydown(host, { key: 'µ', code: 'KeyM' })
+
+    expect(calls).toEqual(['physical digit', 'physical letter'])
+    shortcuts.dispose()
+  })
+
   it('evaluates when clauses against nested context keys', () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
