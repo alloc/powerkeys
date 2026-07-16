@@ -55,6 +55,8 @@ Bindings
 
 - A binding is either one combo such as `Mod+k` or a sequence such as `g g`.
 - A binding always has a handler.
+- Keyboard events emitted during IME composition do not match, dispatch, or
+  consume bindings. Shortcut recording still observes composition events.
 - A binding may also declare `scope`, `when`, `priority`,
   `editablePolicy`, `keyEvent`, and event-consumption behavior.
 - A binding may declare `within` to match only keyboard events originating in

@@ -31,6 +31,44 @@ describe('powerkeys', () => {
     shortcuts.dispose()
   })
 
+  it('does not dispatch or consume matching events during IME composition', () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+
+    const calls: string[] = []
+    const shortcuts = createShortcuts({ target: host })
+    shortcuts.bind({
+      combo: 'Enter',
+      preventDefault: true,
+      stopPropagation: true,
+      handler: () => calls.push('submit'),
+    })
+
+    const composingEvent = keydown(host, { key: 'Enter', code: 'Enter', isComposing: true })
+    const ordinaryEvent = keydown(host, { key: 'Enter', code: 'Enter' })
+
+    expect(calls).toEqual(['submit'])
+    expect(composingEvent.defaultPrevented).toBe(false)
+    expect(ordinaryEvent.defaultPrevented).toBe(true)
+    shortcuts.dispose()
+  })
+
+  it('does not let composing events disturb an active sequence', () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+
+    const calls: string[] = []
+    const shortcuts = createShortcuts({ target: host })
+    shortcuts.bind({ sequence: 'g g', handler: () => calls.push('top') })
+
+    keydown(host, { key: 'g', code: 'KeyG' })
+    keydown(host, { key: 'x', code: 'KeyX', isComposing: true })
+    keydown(host, { key: 'g', code: 'KeyG' })
+
+    expect(calls).toEqual(['top'])
+    shortcuts.dispose()
+  })
+
   it('limits bindings to an element subtree', () => {
     const host = document.createElement('div')
     const editor = document.createElement('div')
@@ -510,6 +548,24 @@ describe('powerkeys', () => {
     expect(calls).toEqual([])
     expect(recording.steps).toEqual(['Meta+k', 'c'])
     expect(recording.expression).toBe('Meta+k c')
+    shortcuts.dispose()
+  })
+
+  it('preserves composing events for active shortcut recording', async () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+
+    const calls: string[] = []
+    const shortcuts = createShortcuts({ target: host })
+    shortcuts.bind('Enter', () => calls.push('handler'))
+    const session = shortcuts.record({ suppressHandlers: false })
+
+    keydown(host, { key: 'Enter', code: 'Enter', isComposing: true })
+    const recording = session.stop()
+
+    expect(recording.steps).toEqual(['Enter'])
+    expect(calls).toEqual([])
+    await expect(session.finished).resolves.toEqual(recording)
     shortcuts.dispose()
   })
 

@@ -301,6 +301,9 @@ export function createShortcuts(options: ShortcutOptions): ShortcutRuntime {
     if (recordingIntercepted.intercepted) {
       return { trace: { event: normalized, candidates: [] } }
     }
+    if (normalized.composing) {
+      return { trace: { event: normalized, candidates: [] } }
+    }
 
     const activeScopes = resolveActiveScopes(getActiveScopes)
     const activeScopesAfterPause = pauseState.applyToScopes(activeScopes)
