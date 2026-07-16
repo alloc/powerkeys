@@ -1,4 +1,4 @@
-import { createShortcuts } from '../src/index'
+import { createShortcuts } from 'powerkeys'
 import { mountBasicShortcuts } from '../examples/basic-usage'
 import { mountCommandAvailability } from '../examples/command-availability'
 import { mountCustomizableShortcuts } from '../examples/customizable-shortcuts'

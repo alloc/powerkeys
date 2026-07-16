@@ -1,4 +1,4 @@
-import { createShortcuts } from '../src/index'
+import { createShortcuts } from 'powerkeys'
 
 function keydown(target: EventTarget, init: KeyboardEventInit & { key: string }): KeyboardEvent {
   const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })

@@ -1,5 +1,5 @@
 {
-  "include": ["src", "demo"],
+  "include": ["src", "demo", "examples"],
   "compilerOptions": {
     "strict": true,
     "erasableSyntaxOnly": true,
@@ -8,6 +8,9 @@
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",
+    "paths": {
+      "powerkeys": ["./src/index.ts"]
+    },
     "declaration": true,
     "emitDeclarationOnly": true,
     "skipLibCheck": true,
