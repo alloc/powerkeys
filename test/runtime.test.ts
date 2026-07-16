@@ -31,6 +31,79 @@ describe('powerkeys', () => {
     shortcuts.dispose()
   })
 
+  it('limits bindings to an element subtree', () => {
+    const host = document.createElement('div')
+    const editor = document.createElement('div')
+    const editorChild = document.createElement('button')
+    const sidebar = document.createElement('div')
+    editor.appendChild(editorChild)
+    host.append(editor, sidebar)
+    document.body.appendChild(host)
+
+    const calls: string[] = []
+    const shortcuts = createShortcuts({ target: host })
+    shortcuts.bind({ combo: 'Ctrl+k', within: editor, handler: () => calls.push('editor') })
+
+    keydown(sidebar, { key: 'k', ctrlKey: true, code: 'KeyK' })
+    keydown(editorChild, { key: 'k', ctrlKey: true, code: 'KeyK' })
+
+    expect(calls).toEqual(['editor'])
+    shortcuts.dispose()
+  })
+
+  it('binds within an element using the string shorthand', () => {
+    const host = document.createElement('div')
+    const editor = document.createElement('div')
+    host.appendChild(editor)
+    document.body.appendChild(host)
+
+    const calls: string[] = []
+    const shortcuts = createShortcuts({ target: host })
+    shortcuts.bindWithin(editor, 'Ctrl+k', () => calls.push('editor'))
+
+    keydown(editor, { key: 'k', ctrlKey: true, code: 'KeyK' })
+
+    expect(calls).toEqual(['editor'])
+    shortcuts.dispose()
+  })
+
+  it('prefers the narrowest matching element boundary', () => {
+    const host = document.createElement('div')
+    const editor = document.createElement('div')
+    const input = document.createElement('div')
+    editor.appendChild(input)
+    host.appendChild(editor)
+    document.body.appendChild(host)
+
+    const calls: string[] = []
+    const shortcuts = createShortcuts({ target: host })
+    shortcuts.bind({ combo: 'x', within: input, handler: () => calls.push('input') })
+    shortcuts.bind({ combo: 'x', within: editor, handler: () => calls.push('editor') })
+    shortcuts.bind('x', () => calls.push('global'))
+
+    keydown(input, { key: 'x', code: 'KeyX' })
+
+    expect(calls).toEqual(['input'])
+    shortcuts.dispose()
+  })
+
+  it('keeps priority above element-boundary specificity', () => {
+    const host = document.createElement('div')
+    const editor = document.createElement('div')
+    host.appendChild(editor)
+    document.body.appendChild(host)
+
+    const calls: string[] = []
+    const shortcuts = createShortcuts({ target: host })
+    shortcuts.bind({ combo: 'x', within: editor, handler: () => calls.push('editor') })
+    shortcuts.bind({ combo: 'x', priority: 1, handler: () => calls.push('priority') })
+
+    keydown(editor, { key: 'x', code: 'KeyX' })
+
+    expect(calls).toEqual(['priority'])
+    shortcuts.dispose()
+  })
+
   it('matches alt number-row shortcuts by physical digit code', () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
@@ -320,6 +393,32 @@ describe('powerkeys', () => {
     shortcuts.dispose()
   })
 
+  it('requires every sequence step to occur within the element boundary', () => {
+    const host = document.createElement('div')
+    const editor = document.createElement('div')
+    const sidebar = document.createElement('div')
+    host.append(editor, sidebar)
+    document.body.appendChild(host)
+
+    const calls: string[] = []
+    const shortcuts = createShortcuts({ target: host, sequenceTimeout: 1000 })
+    shortcuts.bindWithin(editor, {
+      sequence: 'g g',
+      handler: () => calls.push('editor'),
+    })
+
+    keydown(editor, { key: 'g', code: 'KeyG' })
+    keydown(sidebar, { key: 'g', code: 'KeyG' })
+    keydown(editor, { key: 'g', code: 'KeyG' })
+
+    expect(calls).toEqual([])
+
+    keydown(editor, { key: 'g', code: 'KeyG' })
+
+    expect(calls).toEqual(['editor'])
+    shortcuts.dispose()
+  })
+
   it('pauses a scope and prevents dispatch', () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
@@ -542,6 +641,31 @@ describe('powerkeys', () => {
     shortcuts.dispose()
   })
 
+  it('explains element-boundary rejection', () => {
+    const host = document.createElement('div')
+    const editor = document.createElement('div')
+    const sidebar = document.createElement('div')
+    host.append(editor, sidebar)
+    document.body.appendChild(host)
+
+    const shortcuts = createShortcuts({ target: host })
+    const handle = shortcuts.bindWithin(editor, 'x', () => {})
+    const event = new KeyboardEvent('keydown', { key: 'x', code: 'KeyX', bubbles: true })
+    Object.defineProperty(event, 'target', { value: sidebar })
+
+    const trace = shortcuts.explain(event)
+
+    expect(trace.candidates).toEqual([
+      {
+        bindingId: handle.id,
+        matchedScope: 'root',
+        matcherMatched: false,
+        rejectedBy: 'boundary',
+      },
+    ])
+    shortcuts.dispose()
+  })
+
   it('explains candidates rejected by canDispatch', () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
@@ -737,6 +861,19 @@ describe('powerkeys', () => {
     earlySet.replace([{ combo: 'w', handler: () => {} }])
 
     expect(shortcuts.getBindings().map((binding) => binding.expression)).toEqual(['w', 'z'])
+    shortcuts.dispose()
+  })
+
+  it('includes element boundaries in binding snapshots', () => {
+    const host = document.createElement('div')
+    const editor = document.createElement('div')
+    host.appendChild(editor)
+    document.body.appendChild(host)
+
+    const shortcuts = createShortcuts({ target: host })
+    shortcuts.bindWithin(editor, 'x', () => {})
+
+    expect(shortcuts.getBindings()[0]?.within).toBe(editor)
     shortcuts.dispose()
   })
 })

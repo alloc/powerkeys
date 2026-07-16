@@ -37,6 +37,7 @@ export type BindingRecord = {
   preventDefault: boolean
   stopPropagation: boolean
   allowRepeat: boolean
+  within?: HTMLElement
   steps: readonly CompiledStep[]
   whenSource?: string
   when?: CompiledWhenClause
@@ -56,6 +57,7 @@ export type Candidate = {
   matchedScope: string
   kind: 'combo' | 'sequence'
   sequenceLength: number
+  boundaryDepth: number
   when?: WhenTrace
 }
 

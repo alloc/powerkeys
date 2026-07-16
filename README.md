@@ -27,6 +27,10 @@ shortcuts.bind({
     openCommandPalette()
   },
 })
+
+// Use the same syntax for a shortcut limited to an element subtree.
+const editorElement = document.querySelector<HTMLElement>('#editor')!
+shortcuts.bindWithin(editorElement, 'Mod+Enter', () => submitEditor())
 ```
 
 ## Documentation Map

@@ -42,6 +42,7 @@ export function compileBinding(options: CompileBindingOptions): BindingRecord {
     preventDefault: record.preventDefault ?? false,
     stopPropagation: record.stopPropagation ?? false,
     allowRepeat: record.allowRepeat ?? false,
+    within: record.within,
     steps,
     whenSource: record.when,
     when,
@@ -49,10 +50,7 @@ export function compileBinding(options: CompileBindingOptions): BindingRecord {
   }
 }
 
-function normalizeBindingInput(
-  input: BindingInput,
-  handler?: ShortcutHandler,
-): BindingSpec {
+function normalizeBindingInput(input: BindingInput, handler?: ShortcutHandler): BindingSpec {
   if (typeof input === 'string') {
     if (!handler) {
       throw new TypeError('A handler is required when binding from a string')

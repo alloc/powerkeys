@@ -46,6 +46,7 @@ export class SequenceMachine {
     sequenceTimeout: number,
     sourceStates: readonly SequenceState[],
     nextStates: SequenceState[],
+    boundaryDepth: number,
   ): { producedCandidate: boolean; keptState: boolean; candidate?: Candidate } {
     let producedCandidate = false
     let keptState = false
@@ -74,6 +75,7 @@ export class SequenceMachine {
             matchedScope,
             kind: 'sequence',
             sequenceLength: binding.steps.length,
+            boundaryDepth,
           }
         } else {
           nextStates.push({
@@ -96,6 +98,7 @@ export class SequenceMachine {
             matchedScope,
             kind: 'sequence',
             sequenceLength: 1,
+            boundaryDepth,
           }
         } else {
           nextStates.push({

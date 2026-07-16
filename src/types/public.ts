@@ -247,6 +247,16 @@ export type BindingSpec = RunnableInput & {
   sequence?: string
 
   /**
+   * Limits this binding to keyboard events originating within this element's
+   * subtree.
+   *
+   * Every step of a sequence must occur within the element. When otherwise
+   * equivalent bindings match, the binding with the narrower matching element
+   * boundary wins.
+   */
+  within?: HTMLElement
+
+  /**
    * Keyboard event phase that must match this binding.
    *
    * @defaultValue `"keydown"`
@@ -384,6 +394,9 @@ export type BindingSnapshot = {
 
   /** Original `when` source, when present. */
   whenSource?: string
+
+  /** Element boundary that limits this binding, when present. */
+  within?: HTMLElement
 }
 
 /** Snapshot of an in-progress sequence match. */
@@ -515,6 +528,14 @@ export type ShortcutRuntime = {
    * @throws When the runtime is disposed or the binding definition is invalid.
    */
   bind(input: BindingInput, handler?: ShortcutHandler): BindingHandle
+
+  /**
+   * Registers a combo or sequence binding limited to an element subtree.
+   *
+   * This accepts the same binding inputs as {@link bind}. The explicit element
+   * overrides `within` when object-form input already declares one.
+   */
+  bindWithin(within: HTMLElement, input: BindingInput, handler?: ShortcutHandler): BindingHandle
 
   /**
    * Removes a binding.

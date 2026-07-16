@@ -57,6 +57,12 @@ Bindings
 - A binding always has a handler.
 - A binding may also declare `scope`, `when`, `priority`,
   `editablePolicy`, `keyEvent`, and event-consumption behavior.
+- A binding may declare `within` to match only keyboard events originating in
+  an element subtree. `bindWithin(element, input, handler?)` provides the same
+  behavior while preserving the string shorthand.
+- Every step of an element-bound sequence must occur within its element. When
+  otherwise equivalent bindings match, a narrower element boundary takes
+  precedence over a broader or runtime-wide binding.
 - Alt printable bindings match both their semantic key and physical
   `KeyboardEvent.code`. For example, `Alt+1` and `Alt+Digit1` both match the
   physical `Digit1` key, while `Alt+l` and `Alt+KeyL` both match the physical
@@ -175,6 +181,12 @@ Register multi-step navigation
 - `bind({ sequence: "g g", handler })`
 - Adjust `sequenceTimeout` when the default one-second window is not right for
   your app
+
+Limit a shortcut to an element subtree
+
+- `bind({ combo: "Mod+Enter", within: editorElement, handler })`
+- Or use the string shorthand: `bindWithin(editorElement, "Mod+Enter", handler)`
+- Dispose the returned binding handle when the owning element is unmounted
 
 Temporarily disable keyboard shortcuts
 

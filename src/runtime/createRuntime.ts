@@ -1,5 +1,5 @@
 import { compileBinding, normalizeScopes } from '../bindings/compileBinding'
-import { isWithinBoundary } from '../events/isWithinBoundary'
+import { getBoundaryDepth, isWithinBoundary } from '../events/isWithinBoundary'
 import { normalizeKeyboardEvent } from '../events/normalizeKeyboardEvent'
 import { chooseWinner, evaluateEditablePolicy, applyConsumption, matchesStep } from './dispatch'
 import { PauseState } from './pauseState'
@@ -98,6 +98,20 @@ export function createShortcuts(options: ShortcutOptions): ShortcutRuntime {
         return unbind(compiled.id)
       },
     }
+  }
+
+  function bindWithin(
+    within: HTMLElement,
+    input: BindingInput,
+    handler?: ShortcutHandler,
+  ): BindingHandle {
+    if (typeof input === 'string') {
+      if (!handler) {
+        throw new TypeError('A handler is required when binding from a string')
+      }
+      return bind({ combo: input, within, handler })
+    }
+    return bind({ ...input, within }, handler)
   }
 
   function unbind(binding: BindingHandle | string): boolean {
@@ -312,6 +326,13 @@ export function createShortcuts(options: ShortcutOptions): ShortcutRuntime {
         continue
       }
 
+      const boundaryDepth = getBoundaryDepth(binding.within, nativeEvent)
+      if (boundaryDepth == null) {
+        trace.rejectedBy = 'boundary'
+        traceCandidates.set(binding.id, trace)
+        continue
+      }
+
       const editableResult = evaluateEditablePolicy(
         binding,
         normalized.target,
@@ -339,6 +360,7 @@ export function createShortcuts(options: ShortcutOptions): ShortcutRuntime {
           matchedScope,
           kind: 'combo',
           sequenceLength: 1,
+          boundaryDepth,
         })
         traceCandidates.set(binding.id, trace)
         continue
@@ -352,6 +374,7 @@ export function createShortcuts(options: ShortcutOptions): ShortcutRuntime {
         sequenceTimeout,
         sourceStates,
         nextStates,
+        boundaryDepth,
       )
 
       if (sequenceResult.producedCandidate) {
@@ -627,6 +650,7 @@ export function createShortcuts(options: ShortcutOptions): ShortcutRuntime {
       priority: binding.priority,
       keyEvent: binding.keyEvent,
       whenSource: binding.whenSource,
+      within: binding.within,
     }
   }
 
@@ -647,6 +671,7 @@ export function createShortcuts(options: ShortcutOptions): ShortcutRuntime {
 
   return {
     bind,
+    bindWithin,
     unbind,
     createBindingSet,
     pause,
